@@ -110,7 +110,11 @@ let points: [Point] = [  // all points
 
 func round(_ d: Double, n: Int) -> Double {
     
-    return round(d * 100) / 100
+    if (d.truncatingRemainder(dividingBy: 1) == 0) { return d }
+    
+    let p = (pow(10, n) as NSDecimalNumber).doubleValue
+    
+    return round(d * p) / p
 }
 
 
@@ -190,21 +194,25 @@ func loopAstar(_ v: [AstarListPoint], mode: RunMode) {
     
     if visiting.count < 1 { return }  // out loop when no points left
     
-    if !useDijkstra {
+    if !disableAstar {
+        
+        let a = visiting.count
         
         visiting = getMinList(0, min: [visiting.first!.valueF], input: visiting)  // filter queue by A* F value
+        
+        filtered += (a - visiting.count)
     }
         
     for aslPoint in visiting {
         
         // filter by value G
-        if aslPoint.valueG > valueGTres { continue }
+        if aslPoint.valueG > valueGTres { filtered += 1; continue }
         
         // filter by value G with anicipated step
-        if aslPoint.valueG + (aslPoint.valueH / valueHMultiplier * smallestStepTres) > valueGTres { continue }
+        if aslPoint.valueG + (aslPoint.valueH / valueHMultiplier * smallestStepTres) > valueGTres { filtered += 1; continue }
         
-        // filter by value G with anicipated step
-        if aslPoint.step > largestStepTres { continue }
+        // filter by largest single step
+        if aslPoint.step > largestStepTres { filtered += 1; continue }
         
         
             // Add this point to a temperarory visited queue and start a new loop branch
@@ -215,7 +223,7 @@ func loopAstar(_ v: [AstarListPoint], mode: RunMode) {
         if branchV.last!.valueH == 0 {  // out loop when finish
             
             // filter by value G
-            if branchV.last!.valueG > valueGTres { return }
+            if branchV.last!.valueG > valueGTres { filtered += 1; return }
             
             showResults(branchV)
             
@@ -239,23 +247,76 @@ func showResults(_ v: [AstarListPoint] = visited) {
     }
     
     print("\n\n")
+    
+    // compare this route with the best route
+    
+    if (best == nil) { best = v.last!.valueG }
+    
+    else if (v.last!.valueG > best!) { return }
+    
+    else if (v.last!.valueG < best!) {
+        
+        best = v.last!.valueG
+        bestRoutes = []
+    }
+    
+    bestRoutes.append(v)
 }
 
 func showEnd() {
     
-    let execTime = round((CACurrentMediaTime() - start), n: 2)
+    let execTime = round((CACurrentMediaTime() - start), n: 3)
 
     if cals < maxCal {
 
         print("\tCompleted!", terminator: "")
     }
 
-    print("\t\(routes) routes with \(cals) calculations in \(execTime) sec.")
+    print("\t\(routes) routes with \(cals) calculations in \(execTime) sec.  \(filtered) or more are filtered\n\n")
+    
+    
+    if (best != nil) { showAnswer() }  // print answer
     
     exit(0)
 }
 
+func showAnswer() {
+    
+    print("\n/////////////////////////////// ANSWER ////////////////////////////////\n//")
+    
+    print("//\tFastest route\(bestRoutes.count > 1 ? "s cost" : " costs") around \(best!) seconds. Listed below: \n//")
+    
+    var i = 1
+    
+    for route in bestRoutes {
+        
+        print("//  (\(i))\t  ", terminator: "")
+        
+        for aslPoint in route {
+            print("\(aslPoint.point.pos)", terminator: "  ")
+        }
+        print("\n//")
+        
+        i += 1
+    }
+    
+    print("///////////////////////////////////////////////////////////////////////\n")
+}
+
+func configure(mode: RunMode) {
+    
+    let configs: [[Double]] = [config_4, config_5]
+    
+    let m = (mode == .DistanceBased) ? 0 : 1
+    
+    valueGTres =       configs[m][0]
+    smallestStepTres = configs[m][1]
+    largestStepTres =  configs[m][2]
+}
+
 func start(visited: [AstarListPoint], mode: RunMode) {
+    
+    configure(mode: mode)
     
     loopAstar(visited, mode: mode)
 
@@ -269,41 +330,44 @@ func start(visited: [AstarListPoint], mode: RunMode) {
 //_________________________
 
 
-var cals = 0
+    // Variable declarations
 
-var routes = 0
+var cals = 0, filtered = 0, routes = 0
 
 var visited: [AstarListPoint] = []
+
+var valueGTres: Double, smallestStepTres: Double, largestStepTres: Double
+
+var best: Double?, bestRoutes: [[AstarListPoint]] = []
 
 
     // General configurations
 
-let mode: RunMode = .DistanceBased
+let mode: RunMode = .TimeBased  // question #4 or #5
 
 let maxCal = 1000  // limiting the max counts of result calculated
 
-let useDijkstra = false  // disable best F value
-let greedyDepth = 8  // search depth in A*
-let valueHMultiplier = Double(1)
+let disableAstar = false  // disable A*
+
+let greedyDepth = 8  // additional searching depth in A*
+
+let valueHMultiplier = Double(1)  // adjust ratio of H in F value in A*
 
 visited = [AstarListPoint(Point(1, [0, 0]))]  // starting point
 
-//visited.append(AstarListPoint(points[0], parent: visited[0]))  // Route predictions
-//visited.append(AstarListPoint(points[1], parent: visited[1]))
+//visited.append(AstarListPoint(points[0], parent: visited[0], mode: mode))  // Route predictions, uncomment for less calculations
+//visited.append(AstarListPoint(points[1], parent: visited[1], mode: mode))
 
 
-    // Question specific config #4
+    // Question specific configs
 
-let valueGTres = Double(37)         // max G value                  Small gives LESS results
-let smallestStepTres = Double(2)    // anticipated smallest step    Large gives LESS results
-let largestStepTres = Double(12)    // max single step              Small gives LESS results
+    //           max G value      anticipated smallest step     max single step
+    //           Small - LESS     Large - LESS                  Small - LESS
+    // conf #4 [ 36.0,            2.0,                          12.0            ]
+    // conf #5 [ 24.5,            0.0,                          4.0             ]
 
-
-    // Question specific config #5
-
-//let valueGTres = Double(24.5)       // max G value                    Small gives LESS results
-//let smallestStepTres = Double(0)    // anticipated smallest step      Large gives LESS results
-//let largestStepTres = Double(4)     // max single step                Small gives LESS results
+let config_4 = [ 35.0,            2.0,                          5.0             ]
+let config_5 = [ 24.5,            1.0,                          3.0             ]
 
 
     // Run
